@@ -8,7 +8,13 @@ import L from "leaflet";
 import "leaflet.markercluster";
 let markers;
 let map;
-let countMarker = 0;
+let count = 0;
+const jobMarker = L.Marker.extend({
+  title: "",
+  isClick: "",
+  lat: "",
+  lng: ""
+});
 export default {
   name: "Example",
   components: {},
@@ -22,7 +28,6 @@ export default {
           isClick: false
         };
       }),
-      markerAry: [],
       url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       attribution:
         '&copy <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
@@ -38,38 +43,14 @@ export default {
         },
         showMap: true
       },
-      polygon: {
-        latlngs: [
-          [47.2263299, -1.6222],
-          [47.21024000000001, -1.6270065],
-          [47.1969447, -1.6136169],
-          [47.18527929999999, -1.6143036],
-          [47.1794457, -1.6098404],
-          [47.1775788, -1.5985107],
-          [47.1676598, -1.5753365],
-          [47.1593731, -1.5521622],
-          [47.1593731, -1.5319061],
-          [47.1722111, -1.5143967],
-          [47.1960115, -1.4841843],
-          [47.2095404, -1.4848709],
-          [47.2291277, -1.4683914],
-          [47.2533687, -1.5116501],
-          [47.2577961, -1.5531921],
-          [47.26828069, -1.5621185],
-          [47.2657179, -1.589241],
-          [47.2589612, -1.6204834],
-          [47.237287, -1.6266632],
-          [47.2263299, -1.6222]
-        ],
-        color: "#ff00ff"
-      }
+      countMarker:0
     };
   },
   methods: {
     updateMarker() {
-      this.removeMarker();
+      markers.clearLayers();
       this.addressAry.forEach(item => {
-        const marker = L.marker(new L.LatLng(item.lat, item.lng), {
+        const marker = new jobMarker(new L.LatLng(item.lat, item.lng), {
           title: item.title,
           isClick: item.isClick,
           lat: item.lat,
@@ -77,12 +58,7 @@ export default {
         });
         marker.bindPopup(item[2]);
         markers.addLayer(marker);
-        this.markerAry.push(marker);
       });
-    },
-    removeMarker() {
-      this.markerAry.forEach(marker => markers.removeLayer(marker));
-      this.markerAry = [];
     }
   },
   mounted() {
@@ -90,10 +66,11 @@ export default {
     L.tileLayer(this.url, this.attribution).addTo(map);
     markers = L.markerClusterGroup({
       iconCreateFunction: cluster => {
+        count += 1;
         const markerGroup = cluster.getAllChildMarkers();
         const isClick = markerGroup.every(item => item.options.isClick);
         let className =
-          countMarker == markerGroup.length && isClick
+          this.countMarker == markerGroup.length && isClick
             ? "myCustomMarker root"
             : isClick
             ? "myCustomMarker anchor"
@@ -107,14 +84,14 @@ export default {
       zoomToBoundsOnClick: false,
       showCoverageOnHover: false
     });
-    this.updateMarker(); // mount marker 
+    this.updateMarker(); // mount marker
     markers.on("clusterclick", cluster => {
+      console.log(count);
       const markerGroup = cluster.layer.getAllChildMarkers();
       if (markerGroup.every(item => item.options.isClick)) return;
-      countMarker = markerGroup.length;
-      this.addressAry.forEach(item => (item.isClick = false));
-      this.updateMarker();
+      this.countMarker = markerGroup.length;
       this.addressAry.forEach(item => {
+        item.isClick = false
         const index = markerGroup.findIndex(marker => {
           return item.lat == marker.options.lat;
         });
@@ -122,7 +99,8 @@ export default {
           item.isClick = true;
         }
       });
-      this.updateMarker();
+      this.updateMarker()
+      // markers.refreshClusters(cluster.layer)
     });
     map.addLayer(markers);
   }
@@ -150,33 +128,9 @@ export default {
   border: 2px solid rgb(255, 145, 0);
   color: rgb(255, 145, 0);
   position: relative;
-  // &::before {
-  //   content: "";
-  //   display: inline-block;
-  //   position: absolute;
-  //   left: 50%;
-  //   transform: translateX(-50%);
-  //   bottom: -15px;
-  //   width: 0;
-  //   height: 0;
-  //   border-style: solid;
-  //   border-width: 30px 15px 0 15px;
-  //   border-color: white transparent transparent transparent;
-  //   z-index: -1;
-  // }
-  // &::after {
-  //   content: "";
-  //   display: inline-block;
-  //   position: absolute;
-  //   left: 50%;
-  //   transform: translateX(-50%);
-  //   bottom: -15px;
-  //   width: 0;
-  //   height: 0;
-  //   border-style: solid;
-  //   border-width: 32px 15px 0 15px;
-  //   border-color: rgb(255, 145, 0) transparent transparent transparent;
-  //   z-index: -1;
-  // }
+    &:hover {
+    background: #ffc16f;
+    color: white;
+  }
 }
 </style>
