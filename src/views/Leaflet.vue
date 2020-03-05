@@ -5,7 +5,7 @@
 <script>
 import addressPoints from "../../maker";
 import L from "leaflet";
-import "leaflet.markercluster";
+import { MarkerClusterGroup }  from "leaflet.markercluster";
 let markers;
 let map;
 const CLUSTER_SETTING = {
@@ -103,6 +103,7 @@ export default {
     });
     this.updateMarker(); // mount marker
     markers.on("clusterclick", cluster => {
+      console.log(new MarkerClusterGroup())
       cluster.originalEvent.preventDefault();
       const markerGroup = cluster.layer.getAllChildMarkers();
       if (markerGroup.every(item => item.options.isClick)) return;

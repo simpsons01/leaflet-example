@@ -1,5 +1,5 @@
 <template>
-  <v-map :zoom="options.zoom" :center="options.center" style="height:1000px">
+  <v-map v-bind="options" style="height:1000px">
     <v-icondefault></v-icondefault>
     <v-tilelayer :url="url"></v-tilelayer>
     <v-marker-cluster
@@ -12,9 +12,9 @@
         v-for="address in addressAry"
         :key="address.lat"
         :lat-lng="address.latlng"
-        :icon="customicon"
+        @update:visible="updateMarker"
+        ref="marker"
       >
-        <v-popup :content="address.title"></v-popup>
       </v-marker>
     </v-marker-cluster>
   </v-map>
@@ -22,11 +22,21 @@
 
 <script>
 import * as Vue2Leaflet from "vue2-leaflet";
-import { latLng, Icon, icon, divIcon, point } from "leaflet";
+import { latLng, divIcon, point } from "leaflet";
 import Vue2LeafletMarkerCluster from "vue2-leaflet-markercluster";
-import iconUrl from "leaflet/dist/images/marker-icon.png";
-import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 import addressPoints from "../../maker";
+const CLUSTER_SETTING = {
+  spiderfyOnMaxZoom: false,
+  zoomToBoundsOnClick: false,
+  showCoverageOnHover: false,
+  singleMarkerMode: true
+};
+// const jobMarker = L.Marker.extend({
+//   title: "",
+//   isClick: "",
+//   lat: "",
+//   lng: ""
+// });
 
 export default {
   name: "Example",
@@ -35,7 +45,6 @@ export default {
     "v-tilelayer": Vue2Leaflet.LTileLayer,
     "v-icondefault": Vue2Leaflet.LIconDefault,
     "v-marker": Vue2Leaflet.LMarker,
-    "v-popup": Vue2Leaflet.LPopup,
     "v-marker-cluster": Vue2LeafletMarkerCluster
   },
   data() {
@@ -65,43 +74,64 @@ export default {
         showMap: true
       },
       countMarker: 0,
-      clusterOptions: {
-        zoomToBoundsOnClick: false,
-        showCoverageOnHover: false
-      },
-      customicon: icon(
-        Object.assign({}, Icon.Default.prototype.options, {
-          iconUrl,
-          shadowUrl
-        })
-      )
+      clusterOptions: {},
+      tempMarkerAry: [],
+      tempLayer: null
     };
   },
   methods: {
     click(cluster) {
-      console.log(cluster.layer.getAllChildMarkers());
+      console.log(cluster.layer.getAllChildMarkers())
+      cluster.originalEvent.preventDefault();
+      const markerGroup = cluster.layer.getAllChildMarkers();
+      if (markerGroup.every(item => item.options.isClick)) return;
+      this.countMarker = markerGroup.length;
+      this.clearLastMarker();
+      markerGroup.forEach(marker => (marker.options.isClick = true));
+      this.$refs.clusterRef.mapObject.refreshClusters(cluster.layer);
+      this.tempMarkerAry = markerGroup;
+      this.tempLayer = cluster.layer;
     },
-    ready: e => console.log("ready", e)
+    clearLastMarker() {
+      if (this.tempMarkerAry.length > 0)
+        this.tempMarkerAry.forEach(marker => (marker.options.isClick = false));
+      if (this.tempLayer)
+        this.$refs.clusterRef.mapObject.refreshClusters(this.tempLayer);
+    },
+    updateMarker(marker) {
+        marker
+    },
+    ready: e => {
+      e;
+    }
   },
-  mounted() {
-    this.$nextTick(() => {
-      console.log(this.$refs.clusterRef.mapObject._defaultIconCreateFunction)
-      this.$refs.clusterRef.mapObject._defaultIconCreateFunction = function(cluster) {
+  created() {
+    this.clusterOptions = {
+      iconCreateFunction: cluster => {
+        const markerGroup = cluster.getAllChildMarkers();
+        const isClick = markerGroup.every(item => item.options.isClick);
+        let className =
+          this.countMarker == markerGroup.length && isClick
+            ? "myCustomMarker root"
+            : isClick
+            ? "myCustomMarker anchor"
+            : "myCustomMarker";
         return divIcon({
-          html: cluster.getChildCount(),
-          className: "myCustomMarker",
+          html: markerGroup.length,
+          className,
           iconSize: point(40, 40)
         });
-      }
-    })
+      },
+      ...CLUSTER_SETTING
+    };
+  },
+  mounted() {
+    
   }
 };
 </script>
 
 <style lang="scss">
-@import "~leaflet/dist/leaflet.css";
-@import "~leaflet.markercluster/dist/MarkerCluster.css";
-@import "~leaflet.markercluster/dist/MarkerCluster.Default.css";
 .myCustomMarker {
   border-radius: 50%;
   background-color: rgb(255, 145, 0);
@@ -113,8 +143,36 @@ export default {
 
 .root {
   background: white;
-  border: 4px solid rgb(110, 204, 57);
-  color: rgb(110, 204, 57);
+  border: 2px solid rgb(255, 145, 0);
+  color: rgb(255, 145, 0);
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 20px 8px 0 8px;
+    border-color: white transparent transparent transparent;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -16px;
+    z-index: 1;
+  }
+  &::after {
+    content: "";
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 22px 10px 0 10px;
+    border-color: rgb(255, 145, 0) transparent transparent transparent;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -20px;
+    z-index: -1;
+  }
 }
 
 .anchor {
