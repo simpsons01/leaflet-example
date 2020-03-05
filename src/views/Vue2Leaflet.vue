@@ -1,9 +1,6 @@
 <template>
   <div>
-    <v-map v-bind="options" style="height:1000px" 
-          @click="mapClick"
-          @zoom="zoomChange"
-    >
+    <v-map ref="map" v-bind="options" style="height:1000px" @click="mapClick" @zoom="zoomChange">
       <v-tilelayer :url="url"></v-tilelayer>
       <v-polyon :lat-lngs="polygon.latlngs" :color="polygon.color" />
       <v-marker :lat-lng="mapLatlng" :icon="customIcon" />
@@ -24,12 +21,12 @@
         v-for="(card,index) in cardGroup"
         :key="index"
         @mouseleave="cardMouseleave"
-        @mouseover="cardMouseover(card.groupId)"
+        @click="flyToCluster(card.markerInstance)"
+        @mouseover="cardMouseover(card.markerInstance)"
       >
         <p>lat: {{card.lat}}</p>
         <p>lng: {{card.lng}}</p>
         <p>title: {{card.title}}</p>
-        <p>groupId: {{card.groupId}}</p>
       </div>
     </div>
   </div>
@@ -42,17 +39,13 @@ import * as Vue2Leaflet from "vue2-leaflet";
 import { Icon, icon, latLng, divIcon, point } from "leaflet";
 import Vue2LeafletMarkerCluster from "vue2-leaflet-markercluster";
 import addressPoints from "../../maker";
+
 const CLUSTER_SETTING = {
   spiderfyOnMaxZoom: false,
   zoomToBoundsOnClick: false,
   showCoverageOnHover: false,
   singleMarkerMode: true
 };
-let lastHover = null
-
-function random() { // min and max included 
-  return Math.floor(Math.random() * (100000000 - 1 + 1) + 1);
-}
 
 export default {
   name: "Example",
@@ -65,6 +58,7 @@ export default {
   },
   data() {
     return {
+      zoomLevel: 0,
       customIcon: icon(
         Object.assign({}, Icon.Default.prototype.options, {
           iconUrl,
@@ -76,13 +70,14 @@ export default {
         lng: 175.22205007158524
       },
       cardGroup: [],
-      addressAry: addressPoints.map((item) => {
+      addressAry: addressPoints.map(item => {
         return {
-          groupId:0,
           lat: item[0],
           lng: item[1],
           title: item[2],
           isClick: false,
+          isMouseOver: false,
+          isPicked: false,
           latlng: latLng(item[0], item[1])
         };
       }),
@@ -92,7 +87,7 @@ export default {
       options: {
         zoom: 15,
         center: latLng(-37.8219782333, 175.2265028333),
-        maxZoom: 18,
+        maxZoom: 17,
         tileSize: 512,
         zoomOffset: -1,
         showParagraph: false,
@@ -105,6 +100,10 @@ export default {
       clusterOptions: {},
       tempMarkerAry: [],
       tempLayer: null,
+      tempHoverMarker: null,
+      tempHoverLayer: null,
+      tempPickedMarker: null,
+      tempPickedLayer: null,
       polygon: {
         latlngs: [
           [47.2263299, -1.6222],
@@ -133,79 +132,108 @@ export default {
     };
   },
   methods: {
-    zoomChange() {
-       this.$refs.clusterRef.mapObject.refreshClusters(this.tempLayer)
+    zoomChange(map) {
+      this.zoomLevel = map.target._zoom;
     },
     mapClick(map) {
       this.mapLatlng = map.latlng;
     },
+    markerClick(marker) {
+      this.clearLastClickMarker();
+      this.countMarker = 1;
+      marker.target.options.isClick = true;
+      this.$refs.clusterRef.mapObject.refreshClusters(marker.target);
+      this.cardGroup = [
+        {
+          markerInstance: marker.target,
+          ...marker.target.options
+        }
+      ];
+      this.tempMarkerAry = [marker.target];
+      this.tempLayer = marker.target;
+    },
+    cardMouseover(marker) {
+      this.clearLastHoverMarker();
+      marker.options.isMouseOver = true;
+      this.$refs.clusterRef.mapObject.refreshClusters(marker.__parent);
+      this.tempHoverMarker = marker;
+      this.tempHoverLayer = marker.__parent;
+    },
     clusterclick(cluster) {
+      this.clearLastClickMarker();
       const markerGroup = cluster.layer.getAllChildMarkers();
       this.cardGroup = markerGroup.map(item => {
-        return { ...item.options };
+        return {
+          markerInstance: item,
+          ...item.options
+        };
       });
       this.countMarker = markerGroup.length;
-      this.clearLastMarker();
       markerGroup.forEach(marker => (marker.options.isClick = true));
       this.$refs.clusterRef.mapObject.refreshClusters(cluster.layer);
       this.tempMarkerAry = markerGroup;
       this.tempLayer = cluster.layer;
     },
-    clearLastMarker() {
+    clearLastClickMarker() {
       if (this.tempMarkerAry.length > 0)
         this.tempMarkerAry.forEach(marker => {
           marker.options.isClick = false;
+          marker.options.isMouseOver = false;
+          marker.options.isPicked = false;
         });
       if (this.tempLayer)
         this.$refs.clusterRef.mapObject.refreshClusters(this.tempLayer);
     },
-    markerClick(marker) {
-      this.clearLastMarker();
-      this.countMarker = 1;
-      marker.target.options.isClick = true;
-      this.$refs.clusterRef.mapObject.refreshClusters(marker.target);
-      this.cardGroup = [marker.target.options];
-      this.tempMarkerAry = [marker.target];
-      this.tempLayer = marker.target;
+    clearLastHoverMarker() {
+      if (this.tempHoverMarker)
+        this.tempHoverMarker.options.isMouseOver = false;
+      if (this.tempHoverLayer)
+        this.$refs.clusterRef.mapObject.refreshClusters(this.tempHoverLayer);
     },
-    cardMouseover(id) {
-       if(lastHover) lastHover.classList.remove('anchor-over')
-       const anchor =  document.querySelector(`div[data-group-id="${id}"]`)
-       if(anchor) anchor.classList.add('anchor-over')
-       lastHover = anchor
+    clearLastPickedMarker() {
+      if (this.tempPickedMarker) this.tempPickedMarker.options.isPicked = false;
+      if (this.tempPickedLayer)
+        this.$refs.clusterRef.mapObject.refreshClusters(this.tempPickedLayer);
     },
     cardMouseleave() {
-       if(lastHover) lastHover.classList.remove('anchor-over')
+      this.clearLastHoverMarker();
     },
-    // clusterMouseOver() {
-    //   console.log('clustermouseover');
-    // },
-    // markerMouseOver() {
-    //   console.log('markermouseover');
-    // },
+    flyToCluster(marker) {
+      this.clearLastPickedMarker();
+      if (this.zoomLevel < 17) {
+        this.$refs.map.mapObject.flyTo(marker.getLatLng(), 17);
+      }
+      marker.options.isPicked = true;
+      this.$refs.clusterRef.mapObject.refreshClusters(marker.__parent);
+      this.tempPickedMarker = marker;
+      this.tempPickedLayer = marker.__parent;
+    }
   },
   created() {
     this.clusterOptions = {
       iconCreateFunction: cluster => {
         const markerGroup = cluster.getAllChildMarkers();
-        const groupId = random()
-        markerGroup.forEach(item => item.options.groupId = groupId)
-        this.cardGroup.forEach(item => {
-          const index = markerGroup.findIndex(marker => {
-            return marker.options.lat === item.lat
-          })
-          if(index >= 0) item.groupId = groupId
-        }) 
-        const isClick = markerGroup.every(item => item.options.isClick);
-        const className =
-          this.countMarker == markerGroup.length && isClick
+        const statu = {
+          isClick: true,
+          isMouseOver: false,
+          isPicked: false
+        };
+        markerGroup.forEach(marker => {
+          if (!marker.options.isClick) statu.isClick = false;
+          if (marker.options.isPicked) statu.isPicked = true;
+          if (marker.options.isMouseOver) statu.isMouseOver = true;
+        });
+        const spidfyClass =
+          this.countMarker == markerGroup.length && statu.isClick
             ? "root"
-            : isClick
+            : statu.isClick
             ? "anchor"
             : "myCustomMarker";
+        const mouseOverClass = statu.isMouseOver ? "over" : "";
+        const isPickedClass = statu.isPicked ? "picked" : "";
         return divIcon({
-          html: `<div data-group-id=${groupId}>${markerGroup.length}</div>`,
-          className,
+          html: `<div>${markerGroup.length}</div>`,
+          className: `${spidfyClass} ${mouseOverClass} ${isPickedClass}`,
           iconSize: point(40, 40)
         });
       },
@@ -235,13 +263,14 @@ export default {
   position: absolute;
   right: 10px;
   top: 20px;
-  max-height: 600px;
+  max-height: 900px;
   overflow-y: auto;
+  border: 1px solid black;
   .card-items {
     background: white;
-    padding:15px 40px;
+    padding: 20px 35px;
     > p {
-      margin: 2px;
+      margin: 4px;
     }
     &:hover {
       background: #ffc16f;
@@ -302,13 +331,19 @@ export default {
   color: rgb(255, 145, 0);
   position: relative;
   overflow: hidden;
-  transition: .3s all ease-in-out;
+  transition: 0.3s all ease-in-out;
   &:hover {
     background: #ffc16f;
     color: white;
   }
-  .anchor-over {
+  &.over {
     background: #ffc16f;
+    color: white;
+    border: none;
+  }
+  &.picked {
+    background: yellowgreen;
+    border: none;
     color: white;
   }
 }
