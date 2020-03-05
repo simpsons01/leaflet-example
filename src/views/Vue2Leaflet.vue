@@ -2,20 +2,14 @@
   <v-map v-bind="options" style="height:1000px">
     <v-icondefault></v-icondefault>
     <v-tilelayer :url="url"></v-tilelayer>
-    <v-marker-cluster
-      ref="clusterRef"
-      :options="clusterOptions"
-      @clusterclick="click"
-      @ready="ready"
-    >
+    <v-marker-cluster ref="clusterRef" :options="clusterOptions" @clusterclick="clusterclick">
       <v-marker
         v-for="address in addressAry"
         :key="address.lat"
         :lat-lng="address.latlng"
-        @update:visible="updateMarker"
         ref="marker"
-      >
-      </v-marker>
+        @click="markerClick"
+      />
     </v-marker-cluster>
   </v-map>
 </template>
@@ -80,9 +74,7 @@ export default {
     };
   },
   methods: {
-    click(cluster) {
-      console.log(cluster.layer.getAllChildMarkers())
-      cluster.originalEvent.preventDefault();
+    clusterclick(cluster) {
       const markerGroup = cluster.layer.getAllChildMarkers();
       if (markerGroup.every(item => item.options.isClick)) return;
       this.countMarker = markerGroup.length;
@@ -98,11 +90,14 @@ export default {
       if (this.tempLayer)
         this.$refs.clusterRef.mapObject.refreshClusters(this.tempLayer);
     },
-    updateMarker(marker) {
-        marker
-    },
-    ready: e => {
-      e;
+    markerClick(marker) {
+      if (marker.target.options.isClick) return;
+      this.clearLastMarker();
+      this.countMarker = 1;
+      marker.target.options.isClick = true;
+      this.$refs.clusterRef.mapObject.refreshClusters(marker.target);
+      this.tempMarkerAry = [marker.target];
+      this.tempLayer = marker.target;
     }
   },
   created() {
@@ -125,9 +120,7 @@ export default {
       ...CLUSTER_SETTING
     };
   },
-  mounted() {
-    
-  }
+  mounted() {}
 };
 </script>
 
