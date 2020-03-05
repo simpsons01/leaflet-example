@@ -160,7 +160,6 @@ export default {
         this.$refs.clusterRef.mapObject.refreshClusters(this.tempLayer);
     },
     markerClick(marker) {
-      if (marker.target.options.isClick) return;
       this.clearLastMarker();
       this.countMarker = 1;
       marker.target.options.isClick = true;
